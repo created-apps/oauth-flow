@@ -1,0 +1,48 @@
+# Railway deployment config for oauth-flow
+# https://docs.railway.com/reference/config-as-code
+
+[build]
+builder = "NIXPACKS"
+# tsc -> dist/. Nixpacks installs all deps (incl. dev) for the build, then runs start.
+buildCommand = "npm run build"
+
+[deploy]
+startCommand = "npm start"
+
+# The service exposes GET /health -> 200 { status: "ok" }.
+# Note: the app only starts listening after its startup DB check passes, so the
+# first successful healthcheck also confirms DATABASE_URL is reachable.
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+
+# Restart on crash (e.g. transient DB blip). It will NOT loop forever on a bad
+# config — after the retries it stays down so the misconfig is visible.
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+
+# MUST stay at 1. The OAuth PKCE/state store and the rate limiters are in-process
+# memory — a second replica would break OAuth callbacks (state minted on replica A,
+# callback lands on replica B) and halve the effective rate limits. Move both to
+# Redis before raising this.
+numReplicas = 1
+
+# Required environment variables (set these in the Railway service Variables tab,
+# NOT in a committed file):
+#   NODE_ENV=production
+#   DATABASE_URL           Supabase session-pooler connection string
+#   ENCRYPTION_KEY         64 hex chars - NEVER change once set
+#   JWT_SECRET             strong random string
+#   FRONTEND_ORIGIN        real origin(s), comma-separated, no localhost
+#   GOOGLE_CLIENT_ID
+#   GOOGLE_CLIENT_SECRET
+#   GOOGLE_REDIRECT_URI    https://<railway-domain>/auth/google/callback  (also register in Google Cloud)
+
+# Optional (only if the bundled frontend / browser redirect is used):
+#   OAUTH_SUCCESS_REDIRECT  https://<railway-domain>/
+#   OAUTH_ERROR_REDIRECT    https://<railway-domain>/
+
+# Optional (only when a Slack automation exists):
+#   SLACK_BOT_TOKEN
+# PORT is injected by Railway automatically - do not set it.
+#
+
